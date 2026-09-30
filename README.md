@@ -1,58 +1,37 @@
-# -*- coding: utf-8 -*-
-
 import asyncio
 import logging
 import sqlite3
 import random
-import string
+import aiohttp
+
 from decimal import Decimal, ROUND_HALF_UP
 
-import aiohttp
 from aiogram import Bot, Dispatcher, F
 from aiogram.filters import CommandStart
 from aiogram.types import (
     Message,
     CallbackQuery,
     InlineKeyboardMarkup,
-    InlineKeyboardButton,
+    InlineKeyboardButton
 )
 from aiogram.enums import ParseMode
 from aiogram.client.default import DefaultBotProperties
 
 
-# ============================================================
-#                     НАСТРОЙКИ
-# ============================================================
-
-# ВСТАВЬ СЮДА НОВЫЙ ТОКЕН TELEGRAM-БОТА
 BOT_TOKEN = "8868297876:AAHfQPx0RVng8uuYuKk-cu_1n5_CxG56nJ0"
+CRYPTO_PAY_TOKEN = 640478:AAkwM9d8MaHsJFssWQafVdHIuaE2JtYvOTF""
 
-# ВСТАВЬ СЮДА ТОКЕН CRYPTO BOT API
-CRYPTO_PAY_TOKEN = "640478:AAkwM9d8MaHsJFssWQafVdHIuaE2JtYvOTF"
+SUPPORT_USERNAME = "@fhcnncns"
 
-# Твой username поддержки
-SUPPORT_USERNAME = "@fuhbfbhfbh"
-
-# Цены
 NORMAL_PRICE = Decimal("0.30")
 PARSING_PRICE = Decimal("0.50")
 
-
-# ============================================================
-#                     ЛОГИРОВАНИЕ
-# ============================================================
+DB_NAME = "proxy_shop.db"
 
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s | %(levelname)s | %(message)s"
 )
-
-
-# ============================================================
-#                     БАЗА ДАННЫХ
-# ============================================================
-
-DB_NAME = "proxy_shop.db"
 
 db = sqlite3.connect(DB_NAME)
 cursor = db.cursor()
@@ -73,11 +52,6 @@ CREATE TABLE IF NOT EXISTS orders (
 
 db.commit()
 
-
-# ============================================================
-#                     BOT / DISPATCHER
-# ============================================================
-
 bot = Bot(
     token=BOT_TOKEN,
     default=DefaultBotProperties(
@@ -87,16 +61,11 @@ bot = Bot(
 
 dp = Dispatcher()
 
-
-# ============================================================
-#                     ДАННЫЕ
-# ============================================================
-
 COUNTRIES = {
     "cuba": "🇨🇺 Куба",
     "indonesia": "🇮🇩 Индонезия",
     "lithuania": "🇱🇹 Литва",
-    "russia": "🇷🇺 Россия",
+    "russia": "🇷🇺 Россия"
 }
 
 CATEGORIES = {
@@ -121,18 +90,8 @@ CATEGORIES = {
     }
 }
 
-
-# ============================================================
-#                     ВРЕМЕННОЕ СОСТОЯНИЕ
-# ============================================================
-
-# user_id -> выбранные параметры
 user_state = {}
 
-
-# ============================================================
-#                     КЛАВИАТУРЫ
-# ============================================================
 
 def main_menu():
     return InlineKeyboardMarkup(
@@ -277,34 +236,20 @@ def payment_menu():
     )
 
 
-# ============================================================
-#                     ГЛАВНОЕ МЕНЮ
-# ============================================================
-
 @dp.message(CommandStart())
 async def start(message: Message):
-
     user_state.pop(message.from_user.id, None)
 
-    text = (
+    await message.answer(
         "👋 <b>Добро пожаловать в Proxy Shop!</b>\n\n"
         "🔐 Здесь вы можете приобрести прокси для различных задач.\n\n"
-        "🛒 Выберите нужный раздел ниже:"
-    )
-
-    await message.answer(
-        text,
+        "🛒 Выберите нужный раздел ниже:",
         reply_markup=main_menu()
     )
 
 
-# ============================================================
-#                     КУПИТЬ
-# ============================================================
-
 @dp.callback_query(F.data == "buy")
 async def buy_proxy(callback: CallbackQuery):
-
     await callback.answer()
 
     await callback.message.edit_text(
@@ -314,13 +259,8 @@ async def buy_proxy(callback: CallbackQuery):
     )
 
 
-# ============================================================
-#                     ВЫБОР СТРАНЫ
-# ============================================================
-
 @dp.callback_query(F.data.startswith("country:"))
 async def select_country(callback: CallbackQuery):
-
     await callback.answer()
 
     country = callback.data.split(":")[1]
@@ -329,28 +269,19 @@ async def select_country(callback: CallbackQuery):
         "country": country
     }
 
-    country_name = COUNTRIES[country]
-
     await callback.message.edit_text(
-        f"🌍 <b>{country_name}</b>\n\n"
+        f"🌍 <b>{COUNTRIES[country]}</b>\n\n"
         "Выберите категорию прокси:\n\n"
-
         "🔒 <b>Обычные прокси</b> — $0.30/шт.\n"
         "Для защиты, приватности и повседневных задач.\n\n"
-
         "📊 <b>Прокси для парсинга логов</b> — $0.50/шт.\n"
         "Для обработки данных и задач парсинга.",
         reply_markup=categories_menu(country)
     )
 
 
-# ============================================================
-#                     ВЫБОР КАТЕГОРИИ
-# ============================================================
-
 @dp.callback_query(F.data.startswith("category:"))
 async def select_category(callback: CallbackQuery):
-
     await callback.answer()
 
     _, category, country = callback.data.split(":")
@@ -371,20 +302,14 @@ async def select_category(callback: CallbackQuery):
     )
 
 
-# ============================================================
-#                     КОЛИЧЕСТВО
-# ============================================================
-
 @dp.callback_query(F.data.startswith("qty:"))
 async def select_quantity(callback: CallbackQuery):
-
     await callback.answer()
 
     value = callback.data.split(":")[1]
     user_id = callback.from_user.id
 
     if value == "custom":
-
         user_state.setdefault(user_id, {})
         user_state[user_id]["waiting_quantity"] = True
 
@@ -403,13 +328,8 @@ async def select_quantity(callback: CallbackQuery):
     await show_order(callback.message, user_id, quantity)
 
 
-# ============================================================
-#                     РУЧНОЕ КОЛИЧЕСТВО
-# ============================================================
-
 @dp.message(F.text)
 async def custom_quantity(message: Message):
-
     user_id = message.from_user.id
     state = user_state.get(user_id)
 
@@ -422,20 +342,16 @@ async def custom_quantity(message: Message):
     try:
         quantity = int(message.text.strip())
     except ValueError:
-
         await message.answer(
             "❌ Введите количество целым числом.\n\n"
             "Например: <code>120</code>"
         )
-
         return
 
     if quantity < 1 or quantity > 5000:
-
         await message.answer(
             "❌ Количество должно быть от <b>1</b> до <b>5000</b>."
         )
-
         return
 
     state["waiting_quantity"] = False
@@ -443,12 +359,7 @@ async def custom_quantity(message: Message):
     await show_order(message, user_id, quantity)
 
 
-# ============================================================
-#                     ФОРМИРОВАНИЕ ЗАКАЗА
-# ============================================================
-
 async def show_order(message, user_id, quantity):
-
     state = user_state.get(user_id)
 
     if not state:
@@ -481,21 +392,15 @@ async def show_order(message, user_id, quantity):
     )
 
 
-# ============================================================
-#                     CRYPTO PAY API
-# ============================================================
-
 CRYPTO_API = "https://pay.crypt.bot/api"
 
 
 async def crypto_api(method, data=None):
-
     headers = {
         "Crypto-Pay-API-Token": CRYPTO_PAY_TOKEN
     }
 
     async with aiohttp.ClientSession() as session:
-
         async with session.post(
             f"{CRYPTO_API}/{method}",
             headers=headers,
@@ -513,12 +418,7 @@ async def crypto_api(method, data=None):
             return result
 
 
-# ============================================================
-#                     СОЗДАНИЕ INVOICE
-# ============================================================
-
 async def create_invoice(amount, payload):
-
     result = await crypto_api(
         "createInvoice",
         {
@@ -538,13 +438,8 @@ async def create_invoice(amount, payload):
     return result["result"]
 
 
-# ============================================================
-#                     ОПЛАТА
-# ============================================================
-
 @dp.callback_query(F.data == "pay")
 async def create_payment(callback: CallbackQuery):
-
     await callback.answer()
 
     user_id = callback.from_user.id
@@ -588,7 +483,6 @@ async def create_payment(callback: CallbackQuery):
     )
 
     if not invoice:
-
         cursor.execute(
             "UPDATE orders SET status=? WHERE id=?",
             ("error", order_id)
@@ -653,12 +547,7 @@ async def create_payment(callback: CallbackQuery):
     )
 
 
-# ============================================================
-#                     ПРОВЕРКА ОПЛАТЫ
-# ============================================================
-
 async def get_invoice(invoice_id):
-
     result = await crypto_api(
         "getInvoices",
         {
@@ -679,7 +568,6 @@ async def get_invoice(invoice_id):
 
 @dp.callback_query(F.data.startswith("check:"))
 async def check_payment(callback: CallbackQuery):
-
     await callback.answer()
 
     order_id = int(
@@ -699,12 +587,10 @@ async def check_payment(callback: CallbackQuery):
     order = cursor.fetchone()
 
     if not order:
-
         await callback.message.edit_text(
             "❌ Заказ не найден.",
             reply_markup=main_menu()
         )
-
         return
 
     (
@@ -718,36 +604,29 @@ async def check_payment(callback: CallbackQuery):
     ) = order
 
     if status == "paid":
-
         await callback.message.edit_text(
             "✅ Этот заказ уже был выдан.",
             reply_markup=main_menu()
         )
-
         return
 
     invoice = await get_invoice(invoice_id)
 
     if not invoice:
-
         await callback.message.answer(
             "❌ Не удалось проверить счёт."
         )
-
         return
 
     invoice_status = invoice.get("status")
 
     if invoice_status != "paid":
-
         await callback.answer(
             "⏳ Оплата пока не подтверждена.",
             show_alert=True
         )
-
         return
 
-    # Защита от повторной выдачи
     cursor.execute(
         "SELECT status FROM orders WHERE id=?",
         (order_id,)
@@ -756,18 +635,13 @@ async def check_payment(callback: CallbackQuery):
     current_status = cursor.fetchone()[0]
 
     if current_status == "paid":
-
         await callback.message.edit_text(
             "✅ Этот заказ уже был выдан.",
             reply_markup=main_menu()
         )
-
         return
 
-    # Генерируем товар
-    proxies = generate_proxies(
-        quantity
-    )
+    proxies = generate_proxies(quantity)
 
     proxy_text = "\n".join(proxies)
 
@@ -796,20 +670,7 @@ async def check_payment(callback: CallbackQuery):
     )
 
 
-# ============================================================
-#                     ГЕНЕРАЦИЯ ПРОКСИ
-# ============================================================
-
 def random_ip():
-    """
-    ДЕМОНСТРАЦИОННЫЙ генератор формата IP:PORT.
-
-    ВАЖНО:
-    Эти адреса НЕ являются гарантированно рабочими прокси.
-    Для реального магазина здесь нужно подключить поставщика
-    прокси или собственную базу реальных IP.
-    """
-
     octets = [
         str(random.randint(1, 223)),
         str(random.randint(0, 255)),
@@ -829,26 +690,18 @@ def random_ip():
 
 
 def generate_proxies(quantity):
-
     result = []
-
     used = set()
 
     while len(result) < quantity:
-
         proxy = random_ip()
 
         if proxy not in used:
-
             used.add(proxy)
             result.append(proxy)
 
     return result
 
-
-# ============================================================
-#                     ВЫДАЧА ТОВАРА
-# ============================================================
 
 async def send_proxies(
     message,
@@ -858,12 +711,8 @@ async def send_proxies(
     amount,
     proxy_text
 ):
-
     category_name = CATEGORIES[category]["name"]
     country_name = COUNTRIES[country]
-
-    # Telegram ограничивает размер сообщения.
-    # Поэтому большие заказы отправляем несколькими сообщениями.
 
     header = (
         "🎉 <b>Ваш товар успешно получен!</b>\n\n"
@@ -874,31 +723,21 @@ async def send_proxies(
         "🔐 <b>Ваши прокси:</b>\n\n"
     )
 
-    # Отправляем заголовок
-    await message.edit_text(
-        header
-    )
+    await message.edit_text(header)
 
-    # Telegram message limit примерно 4096 символов.
-    # Разбиваем прокси на части.
     lines = proxy_text.split("\n")
-
     chunk = ""
 
     for line in lines:
-
         if len(chunk) + len(line) + 1 > 3500:
-
             await message.answer(
                 f"<code>{chunk}</code>"
             )
-
             chunk = ""
 
         chunk += line + "\n"
 
     if chunk:
-
         await message.answer(
             f"<code>{chunk}</code>"
         )
@@ -911,13 +750,8 @@ async def send_proxies(
     )
 
 
-# ============================================================
-#                     ПОДДЕРЖКА
-# ============================================================
-
 @dp.callback_query(F.data == "support")
 async def support(callback: CallbackQuery):
-
     await callback.answer()
 
     keyboard = InlineKeyboardMarkup(
@@ -925,7 +759,7 @@ async def support(callback: CallbackQuery):
             [
                 InlineKeyboardButton(
                     text="💬 Написать в поддержку",
-                    url="https://t.me/uvgvdgvdgv7dgvdgv"
+                    url="https://t.me/fhcnncns"
                 )
             ],
             [
@@ -947,13 +781,8 @@ async def support(callback: CallbackQuery):
     )
 
 
-# ============================================================
-#                     НАЗАД / ГЛАВНОЕ
-# ============================================================
-
 @dp.callback_query(F.data == "home")
 async def home(callback: CallbackQuery):
-
     await callback.answer()
 
     user_state.pop(
@@ -970,19 +799,16 @@ async def home(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "back_category")
 async def back_category(callback: CallbackQuery):
-
     await callback.answer()
 
     user_id = callback.from_user.id
     state = user_state.get(user_id)
 
     if not state:
-
         await callback.message.edit_text(
             "🏠 <b>Главное меню</b>",
             reply_markup=main_menu()
         )
-
         return
 
     country = state["country"]
@@ -996,7 +822,6 @@ async def back_category(callback: CallbackQuery):
 
 @dp.callback_query(F.data == "back_quantity")
 async def back_quantity(callback: CallbackQuery):
-
     await callback.answer()
 
     await callback.message.edit_text(
@@ -1005,12 +830,7 @@ async def back_quantity(callback: CallbackQuery):
     )
 
 
-# ============================================================
-#                     ЗАПУСК
-# ============================================================
-
 async def main():
-
     if BOT_TOKEN == "ВСТАВЬ_НОВЫЙ_ТОКЕН_СЮДА":
         print(
             "ОШИБКА: вставьте новый токен Telegram-бота "
